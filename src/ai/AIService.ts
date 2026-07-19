@@ -19,8 +19,6 @@ export class AIService {
       "exec",
       "--sandbox",
       "read-only",
-      "--ask-for-approval",
-      "never",
       "--skip-git-repo-check",
       "-"
     ]);
@@ -45,7 +43,8 @@ export class AIService {
       const child = spawn(command, args, {
         cwd,
         windowsHide: true,
-        stdio: ["pipe", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: process.platform === "win32"
       });
 
       let stdout = "";
@@ -114,6 +113,12 @@ export class AIService {
     if ("code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
       return new Error(
         `Unable to find AI command "${command}". Set aiMerge.aiCommand to the full path of codex.cmd or restart VS Code after installing Codex CLI.`
+      );
+    }
+
+    if ("code" in error && (error as NodeJS.ErrnoException).code === "EINVAL") {
+      return new Error(
+        `Unable to start AI command "${command}". On Windows, set aiMerge.aiCommand to "codex" or the full codex.cmd path, then restart the Extension Development Host.`
       );
     }
 
