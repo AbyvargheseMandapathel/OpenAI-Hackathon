@@ -1,0 +1,143 @@
+{
+  "name": "ai-merge-engineer",
+  "displayName": "AI Merge Engineer",
+  "description": "Autonomously detects, analyzes, verifies, and applies Git merge conflict resolutions with AI assistance.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "private": true,
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:aiMerge.resolveConflict",
+    "onCommand:aiMerge.explainConflict",
+    "onCommand:aiMerge.githubSignIn",
+    "onCommand:aiMerge.githubSignOut"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiMerge.resolveConflict",
+        "title": "AI Merge: Resolve Conflict",
+        "category": "AI Merge"
+      },
+      {
+        "command": "aiMerge.explainConflict",
+        "title": "AI Merge: Explain Conflict",
+        "category": "AI Merge"
+      },
+      {
+        "command": "aiMerge.githubSignIn",
+        "title": "AI Merge: GitHub Sign In",
+        "category": "AI Merge"
+      },
+      {
+        "command": "aiMerge.githubSignOut",
+        "title": "AI Merge: GitHub Sign Out",
+        "category": "AI Merge"
+      }
+    ],
+    "configuration": {
+      "title": "AI Merge Engineer",
+      "properties": {
+        "aiMerge.aiCommand": {
+          "type": "string",
+          "default": "codex",
+          "description": "Local AI command used to generate merge proposals."
+        },
+        "aiMerge.aiArgs": {
+          "type": "array",
+          "default": [
+            "exec",
+            "--sandbox",
+            "read-only",
+            "--ask-for-approval",
+            "never",
+            "--skip-git-repo-check",
+            "-"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments passed to the local AI command. Use '-' when the command should read the prompt from stdin."
+        },
+        "aiMerge.aiTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 1000,
+          "description": "Maximum time to wait for the AI command."
+        },
+        "aiMerge.github.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable GitHub REST API context collection."
+        },
+        "aiMerge.github.webBaseUrl": {
+          "type": "string",
+          "default": "https://github.com",
+          "description": "GitHub web base URL. Use your GitHub Enterprise web URL when needed."
+        },
+        "aiMerge.github.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.github.com",
+          "description": "GitHub REST API base URL. For GitHub Enterprise this is usually https://HOST/api/v3."
+        },
+        "aiMerge.github.token": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub personal access token fallback. OAuth sign-in is preferred when configured."
+        },
+        "aiMerge.github.oauthClientId": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub OAuth app Client ID. Device flow must be enabled for the OAuth app."
+        },
+        "aiMerge.github.oauthScopes": {
+          "type": "array",
+          "default": [
+            "repo",
+            "read:user"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "GitHub OAuth scopes requested during sign-in. Use repo for private repositories."
+        },
+        "aiMerge.github.repository": {
+          "type": "string",
+          "default": "",
+          "description": "GitHub repository in owner/name form. If empty, AI Merge tries to infer it from the origin remote."
+        },
+        "aiMerge.github.pullRequestNumber": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Optional GitHub pull request number to fetch. Set 0 to infer from current branch when possible."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
+    "check": "npm run compile && npm run lint",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "@types/vscode": "^1.92.0",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
+    "eslint": "^9.18.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.3"
+  }
+}
