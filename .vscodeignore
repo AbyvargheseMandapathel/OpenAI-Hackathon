@@ -5,4 +5,5 @@ src/**
 eslint.config.mjs
 tsconfig.json
 node_modules/**
-*.map
+test/**
+**/*.map

@@ -33,4 +33,14 @@ export interface GitHubPullRequestSummary {
   headRef: string;
   baseRef: string;
   htmlUrl: string;
+  body?: string;
+}
+
+export interface GitHubPullRequestFileSummary {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
 }

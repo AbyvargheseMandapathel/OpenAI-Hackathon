@@ -1,9 +1,18 @@
 {
-  "name": "ai-merge-engineer",
-  "displayName": "AI Merge Engineer",
-  "description": "Autonomously detects, analyzes, verifies, and applies Git merge conflict resolutions with AI assistance.",
-  "version": "0.0.1",
-  "publisher": "local",
+  "name": "ai-engineering-radar",
+  "displayName": "AI Engineering Radar",
+  "description": "Surfaces engineering context, risk, contributors, pull requests, and recommended actions before implementation begins.",
+  "version": "1.0.1",
+  "publisher": "abyvargheese",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AbyvargheeseMandapathil/OpenAI-Hackathon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AbyvargheeseMandapathil/OpenAI-Hackathon/issues"
+  },
+  "homepage": "https://github.com/AbyvargheeseMandapathil/OpenAI-Hackathon#readme",
   "private": true,
   "engines": {
     "vscode": "^1.92.0"
@@ -13,6 +22,8 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:aiRadar.analyzeCurrentFile",
+    "onCommand:aiRadar.githubSignIn",
     "onCommand:aiMerge.resolveConflict",
     "onCommand:aiMerge.explainConflict",
     "onCommand:aiMerge.githubSignIn",
@@ -21,6 +32,16 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "aiRadar.analyzeCurrentFile",
+        "title": "AI Radar: Analyze Current File",
+        "category": "AI Radar"
+      },
+      {
+        "command": "aiRadar.githubSignIn",
+        "title": "AI Radar: Connect GitHub",
+        "category": "AI Radar"
+      },
       {
         "command": "aiMerge.resolveConflict",
         "title": "AI Merge: Resolve Conflict",
@@ -43,12 +64,12 @@
       }
     ],
     "configuration": {
-      "title": "AI Merge Engineer",
+      "title": "AI Engineering Radar",
       "properties": {
         "aiMerge.aiCommand": {
           "type": "string",
           "default": "codex",
-          "description": "Local AI command used to generate merge proposals."
+          "description": "Local AI command used for Radar Agent guidance and legacy merge proposals."
         },
         "aiMerge.aiArgs": {
           "type": "array",
@@ -116,6 +137,27 @@
           "default": 0,
           "minimum": 0,
           "description": "Optional GitHub pull request number to fetch. Set 0 to infer from current branch when possible."
+        },
+        "aiRadar.alerts.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show automatic alerts when the active file appears risky or overlaps active engineering work."
+        },
+        "aiRadar.alerts.riskThreshold": {
+          "type": "string",
+          "default": "MEDIUM",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "description": "Minimum radar risk level required before showing an automatic alert."
+        },
+        "aiRadar.alerts.debounceMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 500,
+          "description": "Delay before analyzing the active file after edits."
         }
       }
     }
@@ -127,7 +169,9 @@
     "lint": "eslint src",
     "check": "npm run compile && npm run lint",
     "test": "npm run compile && node --test test/*.test.cjs",
-    "vscode:prepublish": "npm run compile"
+    "package": "npm run check && npx @vscode/vsce package --no-dependencies",
+    "release:patch": "npm version patch --no-git-tag-version && npm run package",
+    "vscode:prepublish": "npm run check"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

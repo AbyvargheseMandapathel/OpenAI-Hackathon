@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
 
-import { ResolveConflictCommand } from "../commands/ResolveConflictCommand";
+import { AnalyzeCurrentFileCommand } from "../commands/AnalyzeCurrentFileCommand";
 
 export class StatusBarService implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
 
   public constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    this.item.command = ResolveConflictCommand.commandId;
-    this.item.text = "$(git-merge) AI Merge";
-    this.item.tooltip = "Resolve Git merge conflicts with AI Merge Engineer";
+    this.item.command = AnalyzeCurrentFileCommand.commandId;
+    this.item.text = "$(radar) AI Radar";
+    this.item.tooltip = "Analyze engineering context for the active file";
   }
 
   public show(): void {

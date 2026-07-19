@@ -23,6 +23,11 @@ interface StoredGitHubToken {
   scope?: string;
 }
 
+export interface GitHubConnectionStatus {
+  kind: "oauth" | "personalToken" | "notConfigured" | "signedOut";
+  enabled: boolean;
+}
+
 const SECRET_KEY = "githubOAuthToken";
 
 export class GitHubAuthService {
@@ -54,6 +59,11 @@ export class GitHubAuthService {
       accessToken: token.access_token,
       scope: token.scope
     } satisfies StoredGitHubToken));
+    await config.update(
+      "enabled",
+      true,
+      vscode.workspace.workspaceFolders ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
+    );
     this.logger.info("GitHub OAuth sign-in completed.");
     await vscode.window.showInformationMessage("GitHub sign-in completed.");
   }
@@ -66,6 +76,23 @@ export class GitHubAuthService {
   public async getAccessToken(): Promise<string | undefined> {
     const stored = await this.readStoredToken();
     return stored?.accessToken;
+  }
+
+  public async getConnectionStatus(): Promise<GitHubConnectionStatus> {
+    const config = vscode.workspace.getConfiguration("aiMerge.github");
+    const enabled = config.get<boolean>("enabled", false);
+    if (await this.getAccessToken()) {
+      return { kind: "oauth", enabled };
+    }
+
+    if (config.get<string>("token", "").trim()) {
+      return { kind: "personalToken", enabled };
+    }
+
+    return {
+      kind: config.get<string>("oauthClientId", "").trim() ? "signedOut" : "notConfigured",
+      enabled
+    };
   }
 
   private async requestDeviceCode(
@@ -82,7 +109,8 @@ export class GitHubAuthService {
       body: JSON.stringify({
         client_id: clientId,
         scope: scopes.join(" ")
-      })
+      }),
+      signal: AbortSignal.timeout(15_000)
     });
 
     if (!response.ok) {
@@ -113,7 +141,8 @@ export class GitHubAuthService {
           client_id: clientId,
           device_code: deviceCode.device_code,
           grant_type: "urn:ietf:params:oauth:grant-type:device_code"
-        })
+        }),
+        signal: AbortSignal.timeout(15_000)
       });
 
       if (!response.ok) {

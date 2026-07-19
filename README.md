@@ -1,81 +1,124 @@
-# AI Merge Engineer
+# AI Engineering Radar
 
-AI Merge Engineer is a VS Code extension that helps developers resolve Git merge conflicts with an AI-assisted workflow. It detects conflict markers in open files, gathers local Git and repository context, optionally enriches the prompt with GitHub pull request context, asks Codex CLI for a structured merge proposal, shows the proposal for review, and applies it only after user approval.
+AI Engineering Radar is a VS Code extension that gives developers engineering context before they start implementing. Instead of waiting for conflicts, regressions, or review comments, it analyzes the active file and surfaces recent changes, relevant pull requests, active contributors, affected areas, recommended tests, risk signals, and next actions.
 
-The project is built for a hackathon-style demo, but the architecture is intentionally modular so the same foundation can grow into a production extension.
+The original project began as **AI Merge Engineer**, a merge-conflict assistant. That foundation is still valuable and remains available, but the product has pivoted toward a broader and more differentiated workflow:
 
-## What It Does
+> Help developers understand what they need to know before writing code.
 
-- Detects Git conflict markers in open files.
-- Shows CodeLens actions above each conflict:
-  - `Resolve with AI Merge`
-  - `Explain Conflict`
-- Extracts current and incoming conflict blocks with line numbers and branch labels.
-- Collects local Git context:
-  - current branch
-  - merge target hints
-  - recent file log
-  - diff
-  - blame
-  - changed files
-  - repository root
-- Detects repository context from common project files:
-  - `README.md`
-  - `package.json`
-  - `Cargo.toml`
-  - `requirements.txt`
-  - `composer.json`
-  - `go.mod`
-  - `pom.xml`
-- Builds deterministic prompts for Codex CLI.
-- Calls a configurable local AI command, defaulting to Codex CLI.
-- Validates AI output as JSON before showing it.
-- Displays a review webview with:
-  - Original
-  - Incoming
-  - AI Merge
-  - explanation
-  - confidence
-  - warnings
-- Supports edit, copy, reject, and accept from the review UI.
-- Applies accepted proposals by replacing only the selected conflict region.
-- Includes a verification engine for formatter, lint, build, and test commands.
-- Supports optional GitHub OAuth device flow and GitHub REST API context.
+## Product Vision
 
-## Current Status
+AI Engineering Radar acts like a lightweight AI staff engineer inside VS Code. When a developer opens a file, the extension should help answer:
 
-Implemented through the core MVP path:
+- What changed recently?
+- Which pull requests are relevant?
+- Who has been working in this area?
+- Which APIs, services, or database areas may be affected?
+- Which tests should be run?
+- Which files or areas look high risk?
+- What should the developer read before making changes?
 
-- Extension foundation
-- Conflict detection
-- Git context collection
-- Repository context detection
-- Prompt builder
-- Codex CLI integration
-- Proposal review webview
-- Safe apply flow
-- Verification command planner
-- GitHub OAuth device flow
-- GitHub repository and pull request context
+## Current Experience
 
-Not implemented yet:
+Run:
 
-- Automatic self-healing retry loop
-- Merge history storage
-- Settings UI page
-- Analytics side panel
-- Predictive future-conflict detection
-- Full extension packaging and marketplace release workflow
+```txt
+AI Radar: Analyze Current File
+```
+
+The extension opens an **AI Engineering Radar** panel with:
+
+- Recent Changes
+- Why This Changed
+- Open Pull Requests
+- Active Contributors
+- Affected Areas
+- Recommended Tests
+- Risk Signals
+- Recommended Actions
+- Chat With Radar Agent
+- Diagnostics
+
+The panel also includes a **Connect GitHub** button. It uses GitHub's OAuth device flow, stores the resulting token only in VS Code Secret Storage, enables GitHub context for the workspace, and provides a **Refresh Radar** action after connection.
+
+The status bar also exposes:
+
+```txt
+AI Radar
+```
+
+## Example Output
+
+For a file such as `payment.service.ts`, the radar may show:
+
+```txt
+Engineering Context
+
+Recent Changes
+- Payment API updated
+- Billing service refactored
+- Tax calculation changed
+
+Open Pull Requests
+- #241 Stripe Subscription Support
+- #245 Payment Validation Improvements
+
+Active Contributors
+- Alice
+- John
+
+Risk Level
+HIGH
+
+Recommended Actions
+- Review recent commits touching this file.
+- Review open pull requests on the current branch.
+- Check impact across Payments and billing, API and service boundaries.
+- Run billing/payment test suite.
+```
+
+## Implemented Features
+
+- Analyzes the active file in a Git repository.
+- Reads recent file history with Git.
+- Maps recent file commits to GitHub pull requests when available.
+- Shows PR title/body context and file-level additions, deletions, status, and patch excerpts.
+- Reads active contributors from `git blame`.
+- Reads working tree changes from `git status`.
+- Detects affected engineering areas from file paths and changed files.
+- Recommends test areas from project context and file path signals.
+- Calculates a simple risk level: `LOW`, `MEDIUM`, or `HIGH`.
+- Shows results in a dedicated VS Code webview.
+- Shows automatic alerts when the opened or edited file appears risky.
+- Provides an in-panel Radar Agent chat for follow-up questions and suggested next steps.
+- Supports optional GitHub OAuth device flow.
+- Uses GitHub REST API context for repository and pull request awareness.
+- Preserves the original merge-conflict assistant:
+  - conflict marker detection
+  - CodeLens actions
+  - conflict explanation
+  - Codex CLI merge proposal
+  - proposal review UI
+  - safe apply after approval
+
+## Not Yet Implemented
+
+- AI-generated radar summaries.
+- Cross-file dependency graph analysis.
+- API schema and database migration diffing.
+- Pull request relevance beyond branch matching.
+- Continuous background radar updates.
+- Merge history and analytics.
+- Packaged `.vsix` release.
 
 ## Requirements
 
-- Windows, macOS, or Linux
 - VS Code `1.92.0` or newer
 - Node.js
 - npm
 - Git
-- Codex CLI installed and logged in
-- Optional: GitHub OAuth app for GitHub API context
+- Optional: Codex CLI for AI merge proposals
+- Optional: GitHub OAuth app for GitHub context
 
 Install dependencies:
 
@@ -96,68 +139,75 @@ npm.cmd run check
 npm.cmd test
 ```
 
-## Codex CLI Setup
+## Running The Extension
 
-Install Codex CLI if needed:
-
-```powershell
-npm.cmd install -g @openai/codex
-```
-
-Log in:
+Open this extension project:
 
 ```powershell
-codex login
+cd C:\Users\ABY\Desktop\project\hackathon
+code .
 ```
 
-Verify it works:
+Build:
 
 ```powershell
-codex --version
-codex exec --skip-git-repo-check "Return only this JSON: {\"mergedCode\":\"ok\",\"explanation\":\"test\",\"confidence\":1,\"warnings\":[]}"
+npm.cmd run compile
 ```
 
-Default extension AI settings:
+Launch the Extension Development Host:
 
-```json
-{
-  "aiMerge.aiCommand": "codex",
-  "aiMerge.aiArgs": [
-    "exec",
-    "--sandbox",
-    "read-only",
-    "--skip-git-repo-check",
-    "-"
-  ],
-  "aiMerge.aiTimeoutMs": 120000
-}
+```txt
+F5
 ```
 
-On Windows, if VS Code cannot find `codex`, set the full path:
+In the Extension Development Host:
 
-```json
-{
-  "aiMerge.aiCommand": "C:\\Users\\ABY\\AppData\\Roaming\\npm\\codex.cmd"
-}
+1. Open a Git repository.
+2. Open any tracked source file.
+3. Run:
+
+```txt
+AI Radar: Analyze Current File
 ```
 
-Find the path with:
+The radar panel should open beside the editor.
 
-```powershell
-where.exe codex
-where.exe codex.cmd
+Automatic alerts are enabled by default. When you open or edit a file that crosses the configured risk threshold, VS Code shows a warning with an **Open Radar** action.
+
+Example alert:
+
+```txt
+You are editing src/payment/payment.service.ts. Radar risk is HIGH: File has changed frequently in recent history.
+```
+
+The **Why This Changed** section explains recent file changes by combining local Git commits with GitHub PR metadata. When GitHub can associate a commit with a PR, Radar shows the PR number, title, body excerpt, file status, additions, deletions, and a patch excerpt.
+
+PR cards also include a short deterministic intent line, such as:
+
+```txt
+What this PR appears to do: Optimize payment API; likely optimizes API behavior or latency.
+Active file impact: modified, +18 -7, 25 total file changes.
+```
+
+Use **Chat With Radar Agent** to ask follow-up questions such as:
+
+```txt
+What should I check before changing this file?
+Which PR should I read first?
+What tests should I run before committing?
+Is this safe to refactor now?
 ```
 
 ## GitHub Setup
 
-GitHub support is optional. The extension can resolve conflicts using only local Git and Codex CLI. Enable GitHub when you want repository and pull request context included in the AI prompt.
+GitHub is optional. Enable it when you want repository and pull request context.
 
 Create a GitHub OAuth app:
 
 1. Open https://github.com/settings/developers
 2. Go to **OAuth Apps**
 3. Create a new OAuth app
-4. Use any local homepage and callback URL, for example:
+4. Use local placeholder URLs:
 
 ```txt
 Homepage URL: http://localhost
@@ -179,6 +229,12 @@ Add settings in the Extension Development Host:
 }
 ```
 
+Then run:
+
+```txt
+AI Merge: GitHub Sign In
+```
+
 For Excalidraw:
 
 ```json
@@ -188,192 +244,41 @@ For Excalidraw:
 }
 ```
 
-Sign in from the command palette:
+The settings still use the `aiMerge` namespace for compatibility with the original extension. A future cleanup can migrate them to `aiRadar`.
 
-```txt
-AI Merge: GitHub Sign In
+## Codex CLI Setup
+
+Codex CLI is only required for the legacy AI merge proposal flow.
+
+Install:
+
+```powershell
+npm.cmd install -g @openai/codex
 ```
 
-Sign out:
+Log in:
 
-```txt
-AI Merge: GitHub Sign Out
+```powershell
+codex login
 ```
 
-Personal access token fallback is also supported:
+Default AI command settings:
 
 ```json
 {
-  "aiMerge.github.enabled": true,
-  "aiMerge.github.token": "YOUR_GITHUB_TOKEN"
+  "aiMerge.aiCommand": "codex",
+  "aiMerge.aiArgs": [
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--skip-git-repo-check",
+    "-"
+  ],
+  "aiMerge.aiTimeoutMs": 120000
 }
 ```
 
-OAuth is preferred because tokens are stored in VS Code SecretStorage.
-
-## Running The Extension
-
-Open this extension project:
-
-```powershell
-cd C:\Users\ABY\Desktop\project\hackathon
-code .
-```
-
-Build it:
-
-```powershell
-npm.cmd run compile
-```
-
-Launch the Extension Development Host:
-
-```txt
-F5
-```
-
-In the Extension Development Host:
-
-1. Open a Git repository.
-2. Open a file containing Git conflict markers.
-3. Click `Explain Conflict` to verify detection.
-4. Click `Resolve with AI Merge`.
-5. Review the AI proposal in the webview.
-6. Click `Accept` to apply, or `Reject` to leave the file unchanged.
-
-## Demo With Excalidraw
-
-In the Extension Development Host, open your cloned Excalidraw repo.
-
-Create a safe demo conflict:
-
-```powershell
-git switch -c ai-merge-demo-a
-"export const mergeDemoValue = 'from branch A';" | Out-File -Encoding utf8 ai-merge-demo.ts
-git add ai-merge-demo.ts
-git commit -m "Add demo value from branch A"
-
-git switch -
-git switch -c ai-merge-demo-b
-"export const mergeDemoValue = 'from branch B';" | Out-File -Encoding utf8 ai-merge-demo.ts
-git add ai-merge-demo.ts
-git commit -m "Add demo value from branch B"
-
-git merge ai-merge-demo-a
-```
-
-Open `ai-merge-demo.ts`. You should see CodeLens actions above the conflict.
-
-Use:
-
-```txt
-Explain Conflict
-Resolve with AI Merge
-```
-
-For large repositories such as Excalidraw, avoid running the full test suite during the first demo. Focus on conflict detection, context gathering, Codex proposal generation, review, and apply.
-
-## Expected AI Output
-
-The configured AI command must return JSON matching this schema:
-
-```json
-{
-  "mergedCode": "string",
-  "explanation": "string",
-  "confidence": 0.9,
-  "warnings": ["string"]
-}
-```
-
-The extension validates this shape before opening the proposal webview.
-
-## Architecture
-
-```txt
-src/
-  ai/
-    AIService.ts
-    MergeResultValidator.ts
-    PromptBuilder.ts
-  commands/
-    ExplainConflictCommand.ts
-    GitHubSignInCommand.ts
-    GitHubSignOutCommand.ts
-    ResolveConflictCommand.ts
-  git/
-    GitCommandRunner.ts
-    GitContextService.ts
-    GitHubAuthService.ts
-    GitHubClient.ts
-    GitHubContextService.ts
-    GitHubRepositoryResolver.ts
-    GitRepositoryService.ts
-  models/
-  parser/
-    ConflictDetector.ts
-    ConflictParser.ts
-  services/
-    ApplyMergeService.ts
-    Logger.ts
-    RepositoryContextService.ts
-    WorkspaceService.ts
-  ui/
-    ConflictCodeLensProvider.ts
-    DiffWebviewService.ts
-    StatusBarService.ts
-  verification/
-    VerificationService.ts
-  extension.ts
-```
-
-Core flow:
-
-```txt
-CodeLens
--> ConflictDetector
--> GitContextService
--> RepositoryContextService
--> GitHubContextService
--> PromptBuilder
--> AIService
--> MergeResultValidator
--> DiffWebviewService
--> ApplyMergeService
-```
-
-## Commands
-
-| Command | Purpose |
-| --- | --- |
-| `AI Merge: Resolve Conflict` | Build context, call Codex CLI, and show a proposal |
-| `AI Merge: Explain Conflict` | Show parsed conflict details |
-| `AI Merge: GitHub Sign In` | Start GitHub OAuth device flow |
-| `AI Merge: GitHub Sign Out` | Remove stored GitHub OAuth token |
-
-## Settings
-
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `aiMerge.aiCommand` | `codex` | AI command executable |
-| `aiMerge.aiArgs` | `["exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"]` | Arguments passed to the AI command |
-| `aiMerge.aiTimeoutMs` | `120000` | AI command timeout |
-| `aiMerge.github.enabled` | `false` | Enable GitHub API context |
-| `aiMerge.github.webBaseUrl` | `https://github.com` | GitHub web URL |
-| `aiMerge.github.apiBaseUrl` | `https://api.github.com` | GitHub REST API URL |
-| `aiMerge.github.oauthClientId` | empty | GitHub OAuth app client ID |
-| `aiMerge.github.oauthScopes` | `["repo", "read:user"]` | OAuth scopes |
-| `aiMerge.github.repository` | empty | Repository in `owner/name` form |
-| `aiMerge.github.pullRequestNumber` | `0` | Optional pull request number |
-| `aiMerge.github.token` | empty | Personal access token fallback |
-
-## Troubleshooting
-
-### `spawn codex ENOENT`
-
-VS Code cannot find Codex CLI.
-
-Fix:
+On Windows, if VS Code cannot find Codex:
 
 ```powershell
 where.exe codex
@@ -388,31 +293,170 @@ Then set:
 }
 ```
 
-Restart VS Code after changing PATH or installing Codex CLI.
+## Demo With Excalidraw
 
-### `spawn EINVAL`
+Open your cloned Excalidraw repo in the Extension Development Host.
 
-Usually a Windows process-launch issue. Use the latest project build and restart the Extension Development Host. The extension runs commands through the Windows shell to handle `.cmd` shims.
-
-### `unexpected argument '--ask-for-approval'`
-
-Your Codex CLI version does not support that flag. Remove it from settings:
+Recommended settings:
 
 ```json
 {
-  "aiMerge.aiArgs": [
-    "exec",
-    "--sandbox",
-    "read-only",
-    "--skip-git-repo-check",
-    "-"
-  ]
+  "aiMerge.github.enabled": true,
+  "aiMerge.github.repository": "excalidraw/excalidraw"
 }
 ```
 
-### Command Not Found In VS Code
+Open a meaningful file, then run:
 
-Run the command inside the **Extension Development Host**, not the normal VS Code window.
+```txt
+AI Radar: Analyze Current File
+```
+
+Good demo files are areas with real history and ownership, such as service, package, test, or app files. The radar should show recent commits, contributors, affected areas, recommended tests, and risk level.
+
+## Legacy Merge Conflict Flow
+
+The old merge assistant still works.
+
+Create or open a conflicted file:
+
+```txt
+  <<<<<<< HEAD
+  current code
+  =======
+  incoming code
+  >>>>>>> feature-branch
+```
+
+## Release a VSIX
+
+Run the release checks and create an installable VS Code extension package:
+
+```powershell
+npm.cmd run package
+```
+
+This creates an `.vsix` file in the project directory. Install it from VS Code using **Extensions: Install from VSIX...**.
+
+For every subsequent build, create a higher-versioned update package with:
+
+```powershell
+npm.cmd run release:patch
+```
+
+Install the resulting newer VSIX from your normal VS Code window. VS Code recognizes the higher version as an update and offers its normal extension controls, including reload, disable, uninstall, and install-another-version options.
+
+Before publishing to the Visual Studio Marketplace, create a publisher account and make sure the `publisher` field in `package.json` exactly matches that publisher ID. The current value is `abyvargheese` and should be changed if your Marketplace publisher uses a different ID.
+
+Use the CodeLens actions:
+
+```txt
+Resolve with AI Merge
+Explain Conflict
+```
+
+The merge flow:
+
+```txt
+ConflictDetector
+-> GitContextService
+-> RepositoryContextService
+-> GitHubContextService
+-> PromptBuilder
+-> AIService
+-> MergeResultValidator
+-> DiffWebviewService
+-> ApplyMergeService
+```
+
+## Architecture
+
+```txt
+src/
+  radar/
+    EngineeringRadarService.ts
+  ui/
+    RadarWebviewService.ts
+    ConflictCodeLensProvider.ts
+    DiffWebviewService.ts
+    StatusBarService.ts
+  commands/
+    AnalyzeCurrentFileCommand.ts
+    ResolveConflictCommand.ts
+    ExplainConflictCommand.ts
+    GitHubSignInCommand.ts
+    GitHubSignOutCommand.ts
+  git/
+    GitCommandRunner.ts
+    GitContextService.ts
+    GitHubAuthService.ts
+    GitHubClient.ts
+    GitHubContextService.ts
+    GitHubRepositoryResolver.ts
+    GitRepositoryService.ts
+  services/
+    ApplyMergeService.ts
+    Logger.ts
+    RepositoryContextService.ts
+    WorkspaceService.ts
+  ai/
+    AIService.ts
+    MergeResultValidator.ts
+    PromptBuilder.ts
+  parser/
+    ConflictDetector.ts
+    ConflictParser.ts
+  verification/
+    VerificationService.ts
+  models/
+  extension.ts
+```
+
+Radar flow:
+
+```txt
+AI Radar: Analyze Current File
+-> EngineeringRadarService
+-> GitCommandRunner
+-> RepositoryContextService
+-> GitHubContextService
+-> RadarWebviewService
+```
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `AI Radar: Analyze Current File` | Show engineering context for the active file |
+| `AI Merge: Resolve Conflict` | Legacy AI merge proposal flow |
+| `AI Merge: Explain Conflict` | Explain parsed conflict details |
+| `AI Merge: GitHub Sign In` | Start GitHub OAuth device flow |
+| `AI Merge: GitHub Sign Out` | Remove stored GitHub token |
+
+## Settings
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `aiMerge.github.enabled` | `false` | Enable GitHub API context |
+| `aiMerge.github.webBaseUrl` | `https://github.com` | GitHub web URL |
+| `aiMerge.github.apiBaseUrl` | `https://api.github.com` | GitHub REST API URL |
+| `aiMerge.github.oauthClientId` | empty | GitHub OAuth app client ID |
+| `aiMerge.github.oauthScopes` | `["repo", "read:user"]` | OAuth scopes |
+| `aiMerge.github.repository` | empty | Repository in `owner/name` form |
+| `aiMerge.github.pullRequestNumber` | `0` | Optional pull request number |
+| `aiMerge.github.token` | empty | Personal access token fallback |
+| `aiMerge.aiCommand` | `codex` | Legacy merge AI command executable |
+| `aiMerge.aiArgs` | `["exec", "--sandbox", "read-only", "--skip-git-repo-check", "-"]` | Legacy merge AI command args |
+| `aiMerge.aiTimeoutMs` | `120000` | Legacy merge AI timeout |
+| `aiRadar.alerts.enabled` | `true` | Enable automatic open/edit risk alerts |
+| `aiRadar.alerts.riskThreshold` | `MEDIUM` | Minimum risk level for automatic alerts |
+| `aiRadar.alerts.debounceMs` | `3000` | Delay before analyzing after edits |
+
+## Troubleshooting
+
+### Command Not Found
+
+Run commands inside the **Extension Development Host**, not the normal VS Code window.
 
 From the extension project window:
 
@@ -422,29 +466,49 @@ F5
 
 Then use the command palette in the new window.
 
-### No CodeLens Appears
+### Radar Requires A Git Repository
 
-Make sure the file contains all three conflict markers:
+Open a folder that is inside a Git repo. The radar depends on Git history, blame, and status.
+
+### No GitHub Pull Requests Show Up
+
+Check:
+
+```json
+{
+  "aiMerge.github.enabled": true,
+  "aiMerge.github.repository": "owner/repository"
+}
+```
+
+Then run:
 
 ```txt
-<<<<<<< HEAD
-current code
-=======
-incoming code
->>>>>>> feature-branch
+AI Merge: GitHub Sign In
 ```
 
-Open the conflicted file in the Extension Development Host.
+If `repository` is empty, the extension tries to infer it from `origin`.
 
-## Development Scripts
+### Codex Launch Errors
+
+Codex only affects the legacy merge flow. Radar still works without Codex.
+
+If Codex cannot be found:
 
 ```powershell
-npm.cmd install
-npm.cmd run compile
-npm.cmd run watch
-npm.cmd run check
-npm.cmd test
+where.exe codex
+where.exe codex.cmd
 ```
+
+Then configure the full path:
+
+```json
+{
+  "aiMerge.aiCommand": "C:\\Users\\ABY\\AppData\\Roaming\\npm\\codex.cmd"
+}
+```
+
+If your Codex CLI rejects `--ask-for-approval`, remove that flag from `aiMerge.aiArgs`.
 
 ## Tests
 
@@ -462,27 +526,15 @@ Run:
 npm.cmd test
 ```
 
-## Safety Model
-
-AI Merge Engineer does not apply AI output automatically. It:
-
-1. Parses the selected conflict.
-2. Builds context.
-3. Requests a JSON proposal.
-4. Validates the proposal.
-5. Shows a review UI.
-6. Applies only after the user clicks `Accept`.
-7. Replaces only the selected conflict region.
-8. Rejects merged output that still contains conflict markers.
-
 ## Roadmap
 
-- Add a self-healing retry loop for failed verification.
-- Run verification safely in a temporary worktree.
-- Add merge history and metrics.
-- Add a dedicated settings UI.
-- Add analytics side panel.
-- Add predictive conflict detection for future branch conflicts.
+- Add AI-generated radar summaries.
+- Rank relevant pull requests by touched files and ownership.
+- Detect APIs changed from TypeScript exports and routes.
+- Detect database changes from migrations and schema files.
+- Add dependency graph and service impact analysis.
+- Add continuous file-open radar refresh.
+- Move settings from `aiMerge` namespace to `aiRadar`.
 - Package as `.vsix`.
 - Add integration tests with fixture repositories.
 
