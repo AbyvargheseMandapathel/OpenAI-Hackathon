@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 import * as vscode from "vscode";
 
-import type { EngineeringRadar } from "../models/EngineeringRadar";
+import type { EngineeringRadar, RadarPullRequest, RadarPullRequestFileChange } from "../models/EngineeringRadar";
 import type { Logger } from "../services/Logger";
 
 export class RadarChatService {
@@ -38,6 +38,52 @@ export class RadarChatService {
     return normalizedResponse.length > RadarChatService.maxResponseLength
       ? `${normalizedResponse.slice(0, RadarChatService.maxResponseLength)}\n\n[Response truncated]`
       : normalizedResponse || "No suggestion was returned.";
+  }
+
+  public async analyzePullRequestFile(
+    radar: EngineeringRadar,
+    pullRequest: RadarPullRequest,
+    fileChange: RadarPullRequestFileChange
+  ): Promise<string> {
+    const config = vscode.workspace.getConfiguration("aiMerge");
+    const command = this.resolveCommand(config.get<string>("aiCommand", "codex"));
+    const args = config.get<string[]>("aiArgs", [
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--skip-git-repo-check",
+      "-"
+    ]);
+    const timeoutMs = config.get<number>("aiTimeoutMs", 120_000);
+    const prompt = [
+      "You are AI Engineering Radar. Analyze exactly one changed file inside a pull request.",
+      "Do not summarize the whole PR. Explain what this file's diff adds, removes, or changes and the behavior it contributes to the PR.",
+      "Use only the PR title, description, file metadata, and patch excerpt supplied below.",
+      "Do not use generic phrases such as 'likely fixes a bug'. Do not infer intent that is not supported by evidence.",
+      "If the diff is truncated or the author gave no description, state that limitation plainly.",
+      "Return short markdown sections: File change, Behavior added or changed, Relation to the active file, Review focus.",
+      "",
+      "# Active file",
+      radar.filePath,
+      "",
+      "# Pull request context",
+      JSON.stringify({
+        number: pullRequest.number,
+        title: pullRequest.title,
+        body: pullRequest.body,
+        matchedFiles: pullRequest.matchedFiles
+      }, null, 2),
+      "",
+      "# File change to analyze",
+      JSON.stringify(fileChange, null, 2)
+    ].join("\n");
+
+    this.logger.info(`Starting Radar file analysis for #${pullRequest.number}: ${fileChange.filename}.`);
+    const response = await this.runCommand(command, args, prompt, radar.repositoryRoot, timeoutMs);
+    const normalizedResponse = response.trim();
+    return normalizedResponse.length > RadarChatService.maxResponseLength
+      ? `${normalizedResponse.slice(0, RadarChatService.maxResponseLength)}\n\n[Response truncated]`
+      : normalizedResponse || "No PR analysis was returned.";
   }
 
   private buildPrompt(radar: EngineeringRadar, question: string): string {

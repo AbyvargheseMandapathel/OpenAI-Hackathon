@@ -299,6 +299,7 @@ export class RadarWebviewService {
     const question = document.getElementById("radar-question");
     const askButton = document.getElementById("radar-ask");
     const answer = document.getElementById("radar-answer");
+    const prAnalysisButtons = document.querySelectorAll(".pr-file-analyze");
     const githubButton = document.getElementById("radar-github-connect");
     const refreshButton = document.getElementById("radar-refresh");
 
@@ -331,6 +332,23 @@ export class RadarWebviewService {
       });
     }
 
+    prAnalysisButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const number = Number(button.dataset.prNumber);
+        const fileIndex = Number(button.dataset.fileIndex);
+        if (!Number.isInteger(number) || !Number.isInteger(fileIndex)) {
+          return;
+        }
+        button.disabled = true;
+        button.textContent = "Analyzing...";
+        const result = document.getElementById("pr-analysis-" + number + "-" + fileIndex);
+        if (result) {
+          result.textContent = "Reading the PR description and changed code...";
+        }
+        vscode.postMessage({ type: "analyzePullRequestFile", number, fileIndex });
+      });
+    });
+
     window.addEventListener("message", (event) => {
       const message = event.data;
       if (message.type === "radarAnswer") {
@@ -340,6 +358,17 @@ export class RadarWebviewService {
       if (message.type === "radarError") {
         askButton.disabled = false;
         answer.textContent = message.error;
+      }
+      if (message.type === "pullRequestFileAnalysis") {
+        const result = document.getElementById("pr-analysis-" + message.number + "-" + message.fileIndex);
+        if (result) {
+          result.textContent = message.answer;
+        }
+        const button = document.querySelector(".pr-file-analyze[data-pr-number=\"" + message.number + "\"][data-file-index=\"" + message.fileIndex + "\"]");
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Refresh AI Brief";
+        }
       }
     });
   </script>
@@ -357,7 +386,7 @@ export class RadarWebviewService {
       return undefined;
     }
 
-    const candidate = message as { type?: unknown; question?: unknown };
+    const candidate = message as { type?: unknown; question?: unknown; number?: unknown; fileIndex?: unknown };
     if (candidate.type === "connectGitHub") {
       try {
         await this.gitHubAuthService.signIn();
@@ -384,6 +413,33 @@ export class RadarWebviewService {
         await webview.postMessage({ type: "radarError", error: `Radar refresh failed: ${details}` });
         return undefined;
       }
+    }
+
+    if (
+      candidate.type === "analyzePullRequestFile"
+      && typeof candidate.number === "number"
+      && typeof candidate.fileIndex === "number"
+    ) {
+      const pullRequest = radar.openPullRequests.find((item) => item.number === candidate.number);
+      const fileChange = pullRequest?.fileChanges?.[candidate.fileIndex];
+      if (!pullRequest || !fileChange) {
+        return undefined;
+      }
+
+      try {
+        const answer = await this.radarChatService.analyzePullRequestFile(radar, pullRequest, fileChange);
+        await webview.postMessage({
+          type: "pullRequestFileAnalysis",
+          number: pullRequest.number,
+          fileIndex: candidate.fileIndex,
+          answer
+        });
+      } catch (error) {
+        const details = error instanceof Error ? error.message : String(error);
+        this.logger.error(`PR file analysis failed for #${pullRequest.number}.`, error);
+        await webview.postMessage({ type: "radarError", error: `PR file analysis failed: ${details}` });
+      }
+      return undefined;
     }
 
     if (candidate.type !== "askRadar" || typeof candidate.question !== "string") {
@@ -492,14 +548,19 @@ export class RadarWebviewService {
       : "No file-level diff for the active file was found in this PR.";
     const bodyContext = pullRequest.body
       ? `<div class="meta">${this.escapeHtml(this.extractBodySummary(pullRequest.body))}</div>`
-      : "";
+      : "<div class=\"meta\">No PR description was supplied.</div>";
+    const prFileChanges = pullRequest.fileChanges ?? [];
+    const fileEvidence = prFileChanges.length > 0
+      ? prFileChanges.map((file, index) => `<div class="change-metrics"><strong>${this.escapeHtml(file.filename)}</strong>: ${this.escapeHtml(file.status)}, +${file.additions} -${file.deletions}<br><button class="pr-file-analyze" data-pr-number="${pullRequest.number}" data-file-index="${index}">Analyze This File Change</button><div id="pr-analysis-${pullRequest.number}-${index}" class="chat-answer">File-level AI analysis is available on demand.</div></div>`).join("")
+      : "<div class=\"change-metrics\">No changed-file metadata was returned for this PR.</div>";
 
     return `<div class="pr-card">
       ${this.renderPullRequestLink(pullRequest.htmlUrl, pullRequest.number)}
       <strong>${this.escapeHtml(pullRequest.title)}</strong>
       <div class="meta">${this.escapeHtml(pullRequest.headRef)} -> ${this.escapeHtml(pullRequest.baseRef)} &middot; ${this.escapeHtml(pullRequest.state)}</div>
-      <div class="intent"><strong>What this PR appears to do:</strong> ${this.escapeHtml(this.inferPullRequestIntent(pullRequest, fileChanges))}</div>
+      ${pullRequest.matchedFiles && pullRequest.matchedFiles.length > 0 ? `<div class="meta">Relevant because it changes: ${this.escapeHtml(pullRequest.matchedFiles.join(", "))}</div>` : ""}
       ${bodyContext}
+      ${fileEvidence}
       <div class="change-metrics"><strong>Active file impact:</strong> ${this.escapeHtml(fileSummary)}</div>
     </div>`;
   }
@@ -548,44 +609,6 @@ export class RadarWebviewService {
 
   private riskClass(riskLevel: RiskLevel): string {
     return `risk-${riskLevel.toLowerCase()}`;
-  }
-
-  private inferPullRequestIntent(
-    pullRequest: EngineeringRadar["openPullRequests"][number],
-    fileChanges: EngineeringRadar["fileChangeHistory"][number]["fileChanges"]
-  ): string {
-    const text = `${pullRequest.title}\n${pullRequest.body ?? ""}\n${fileChanges.map((fileChange) => fileChange.patchExcerpt ?? "").join("\n")}`.toLowerCase();
-    const title = pullRequest.title.replace(/[.!?]+$/, "");
-
-    if (/perf|performance|optim/i.test(text) && /api|endpoint|request|response|latency|ms\b/i.test(text)) {
-      return `${title}; likely optimizes API behavior or latency.`;
-    }
-
-    if (/perf|performance|optim|latency|ms\b|speed/i.test(text)) {
-      return `${title}; likely improves runtime performance.`;
-    }
-
-    if (/fix|bug|regression|crash|error|fail/i.test(text)) {
-      return `${title}; likely fixes a bug or regression.`;
-    }
-
-    if (/refactor|cleanup|simplif|rename|extract/i.test(text)) {
-      return `${title}; likely refactors implementation without changing public behavior much.`;
-    }
-
-    if (/test|spec|coverage|vitest|jest|playwright/i.test(text)) {
-      return `${title}; likely changes tests or coverage around this area.`;
-    }
-
-    if (/api|endpoint|request|response|route|service/i.test(text)) {
-      return `${title}; likely changes API or service behavior.`;
-    }
-
-    if (/migration|schema|database|sql|table|column/i.test(text)) {
-      return `${title}; likely changes database or schema behavior.`;
-    }
-
-    return `${title}; review the PR description and active-file diff before editing this area.`;
   }
 
   private extractBodySummary(body: string): string {

@@ -2,7 +2,7 @@
   "name": "ai-engineering-radar",
   "displayName": "AI Engineering Radar",
   "description": "Surfaces engineering context, risk, contributors, pull requests, and recommended actions before implementation begins.",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "publisher": "abyvargheese",
   "license": "MIT",
   "repository": {

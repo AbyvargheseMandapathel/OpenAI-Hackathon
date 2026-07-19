@@ -34,11 +34,32 @@ interface GitHubPullRequestFileResponse {
   patch?: string;
 }
 
-interface GitHubSearchPullRequestResponse {
-  number: number;
-  title: string;
-  html_url: string;
-  body?: string;
+interface GitHubGraphQlResponse<T> {
+  data?: T;
+  errors?: Array<{ message?: string }>;
+}
+
+interface GitHubOpenPullRequestsPage {
+  repository?: {
+    pullRequests: {
+      pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+      nodes: Array<{
+        number: number;
+        title: string;
+        state: string;
+        url: string;
+        body?: string | null;
+        headRefName?: string | null;
+        baseRefName?: string | null;
+        files: { nodes: Array<{ path: string }> };
+      }>;
+    };
+  };
+}
+
+export interface GitHubOpenPullRequestWithFiles {
+  pullRequest: GitHubPullRequestSummary;
+  changedFiles: string[];
 }
 
 export interface GitHubClientOptions {
@@ -95,26 +116,49 @@ export class GitHubClient {
     return pullRequests.filter((pullRequest) => pullRequest.headRef === headBranch);
   }
 
-  public async listOpenPullRequestsForFile(
+  public async listAllOpenPullRequestsWithFiles(
     owner: string,
-    repo: string,
-    relativeFilePath: string
-  ): Promise<GitHubPullRequestSummary[]> {
-    const query = `repo:${owner}/${repo} is:pr is:open path:${relativeFilePath}`;
-    const params = new URLSearchParams({ q: query, per_page: "20" });
-    const response = await this.request<{ items: GitHubSearchPullRequestResponse[] }>(
-      `/search/issues?${params.toString()}`
-    );
+    repo: string
+  ): Promise<GitHubOpenPullRequestWithFiles[]> {
+    const pullRequests: GitHubOpenPullRequestWithFiles[] = [];
+    let cursor: string | null | undefined;
 
-    return response.items.map((pullRequest) => ({
-      number: pullRequest.number,
-      title: pullRequest.title,
-      state: "open",
-      headRef: "unknown",
-      baseRef: "unknown",
-      htmlUrl: pullRequest.html_url,
-      body: pullRequest.body
-    }));
+    do {
+      const response = await this.graphql<GitHubOpenPullRequestsPage>(
+        `query RadarOpenPullRequests($owner: String!, $repo: String!, $after: String) {
+          repository(owner: $owner, name: $repo) {
+            pullRequests(first: 100, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }, after: $after) {
+              pageInfo { hasNextPage endCursor }
+              nodes {
+                number title state url body headRefName baseRefName
+                files(first: 100) { nodes { path } }
+              }
+            }
+          }
+        }`,
+        { owner, repo, after: cursor ?? null }
+      );
+      const page = response.repository?.pullRequests;
+      if (!page) {
+        throw new Error("GitHub GraphQL did not return pull request data.");
+      }
+
+      pullRequests.push(...page.nodes.map((pullRequest) => ({
+        pullRequest: {
+          number: pullRequest.number,
+          title: pullRequest.title,
+          state: pullRequest.state,
+          headRef: pullRequest.headRefName ?? "unknown",
+          baseRef: pullRequest.baseRefName ?? "unknown",
+          htmlUrl: pullRequest.url,
+          body: pullRequest.body ?? undefined
+        },
+        changedFiles: pullRequest.files.nodes.map((file) => file.path)
+      })));
+      cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : undefined;
+    } while (cursor);
+
+    return pullRequests;
   }
 
   public async getPullRequest(
@@ -185,6 +229,43 @@ export class GitHubClient {
     }
 
     return await response.json() as T;
+  }
+
+  private async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+    if (this.options.token && this.options.token.trim().length > 0) {
+      headers.Authorization = `Bearer ${this.options.token}`;
+    }
+
+    const response = await fetch(this.graphqlUrl(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(30_000)
+    });
+    if (!response.ok) {
+      throw new GitHubApiError(
+        response.status,
+        this.readRetryAfterMs(response),
+        `GitHub GraphQL ${response.status} ${response.statusText}`
+      );
+    }
+
+    const payload = await response.json() as GitHubGraphQlResponse<T>;
+    if (payload.errors?.length || !payload.data) {
+      throw new Error(`GitHub GraphQL failed: ${payload.errors?.map((error) => error.message ?? "Unknown error").join("; ") ?? "No data returned"}`);
+    }
+    return payload.data;
+  }
+
+  private graphqlUrl(): string {
+    return this.baseUrl.endsWith("/api/v3")
+      ? `${this.baseUrl.slice(0, -"/api/v3".length)}/api/graphql`
+      : `${this.baseUrl}/graphql`;
   }
 
   private mapPullRequest(pullRequest: GitHubPullRequestResponse): GitHubPullRequestSummary {

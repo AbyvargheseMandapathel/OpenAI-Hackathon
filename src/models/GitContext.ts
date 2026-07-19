@@ -34,6 +34,8 @@ export interface GitHubPullRequestSummary {
   baseRef: string;
   htmlUrl: string;
   body?: string;
+  matchedFiles?: string[];
+  changedFileDetails?: GitHubPullRequestFileSummary[];
 }
 
 export interface GitHubPullRequestFileSummary {

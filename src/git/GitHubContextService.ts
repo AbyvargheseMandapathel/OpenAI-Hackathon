@@ -11,6 +11,7 @@ export interface CollectGitHubContextOptions {
   remoteUrl?: string;
   currentBranch: string;
   relativeFilePath?: string;
+  relatedFilePaths?: string[];
 }
 
 export interface RecentFileCommit {
@@ -44,7 +45,7 @@ export class GitHubContextService {
       return undefined;
     }
 
-    const cacheKey = `${options.remoteUrl ?? ""}:${options.currentBranch}:${options.relativeFilePath ?? ""}`;
+    const cacheKey = `${options.remoteUrl ?? ""}:${options.currentBranch}:${options.relatedFilePaths?.join(",") ?? options.relativeFilePath ?? ""}`;
     const cached = this.getCached(this.contextCache, cacheKey);
     if (cached) {
       return cached;
@@ -94,7 +95,12 @@ export class GitHubContextService {
       const [repository, openPullRequests, explicitPullRequest] = await Promise.all([
         client.getRepository(owner, repo),
         options.relativeFilePath
-          ? client.listOpenPullRequestsForFile(owner, repo, options.relativeFilePath)
+          ? this.collectRelevantOpenPullRequests(
+              client,
+              owner,
+              repo,
+              options.relatedFilePaths ?? [options.relativeFilePath]
+            )
           : client.listOpenPullRequests(owner, repo, options.currentBranch),
         pullRequestNumber > 0
           ? client.getPullRequest(owner, repo, pullRequestNumber)
@@ -109,7 +115,7 @@ export class GitHubContextService {
         openPullRequests,
         diagnostics
       };
-      this.setCached(this.contextCache, cacheKey, context, 60_000);
+      this.setCached(this.contextCache, cacheKey, context, 10 * 60_000);
       return context;
     } catch (error) {
       this.recordRateLimit(error);
@@ -120,6 +126,27 @@ export class GitHubContextService {
         diagnostics
       };
     }
+  }
+
+  private async collectRelevantOpenPullRequests(
+    client: GitHubClient,
+    owner: string,
+    repo: string,
+    relatedFilePaths: string[]
+  ): Promise<GitHubContext["openPullRequests"]> {
+    const candidates = await client.listAllOpenPullRequestsWithFiles(owner, repo);
+    const relevant = await Promise.all(candidates.map(async ({ pullRequest, changedFiles }) => {
+      const matchedFiles = changedFiles
+        .filter((filename) => relatedFilePaths.includes(filename));
+      if (matchedFiles.length === 0) {
+        return undefined;
+      }
+
+      const fileChanges = await client.listPullRequestFiles(owner, repo, pullRequest.number);
+      return { ...pullRequest, matchedFiles, changedFileDetails: fileChanges };
+    }));
+
+    return relevant.filter((pullRequest): pullRequest is NonNullable<typeof pullRequest> => pullRequest !== undefined);
   }
 
   public async collectFileProvenance(
@@ -266,4 +293,5 @@ export class GitHubContextService {
     const seconds = Math.max(1, Math.ceil((this.rateLimitUntil - Date.now()) / 1000));
     return `GitHub requests are paused for about ${seconds} seconds after a rate-limit response. Sign in with AI Merge: GitHub Sign In to increase the GitHub API limit.`;
   }
+
 }

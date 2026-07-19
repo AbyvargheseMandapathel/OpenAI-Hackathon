@@ -40,6 +40,7 @@ export class EngineeringRadarService {
     const diagnostics: string[] = [];
     const relativeFilePath = this.toGitPath(path.relative(repository.rootPath, options.filePath));
     const repositoryContext = await this.repositoryContextService.collectContext(repository.rootPath);
+    const relatedFilePaths = await this.readRelatedFilePaths(repository.rootPath, relativeFilePath);
     const [trackedInHead, workingTreeChange] = await Promise.all([
       this.isTrackedInHead(repository.rootPath, relativeFilePath),
       this.readWorkingTreeChange(repository.rootPath, options.filePath, relativeFilePath)
@@ -60,7 +61,8 @@ export class EngineeringRadarService {
     const github = await this.gitHubContextService.collectContext({
       remoteUrl,
       currentBranch,
-      relativeFilePath
+      relativeFilePath,
+      relatedFilePaths
     });
     const provenance = await this.readFileChangeHistory({
       remoteUrl,
@@ -111,7 +113,17 @@ export class EngineeringRadarService {
         headRef: pullRequest.headRef,
         baseRef: pullRequest.baseRef,
         htmlUrl: pullRequest.htmlUrl,
-        body: pullRequest.body
+        body: pullRequest.body,
+        matchedFiles: pullRequest.matchedFiles,
+        fileChanges: pullRequest.changedFileDetails?.map((file) => ({
+          pullRequestNumber: pullRequest.number,
+          filename: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          changes: file.changes,
+          patchExcerpt: file.patch ? this.truncatePatch(file.patch) : undefined
+        }))
       })) ?? [],
       activeContributors,
       changedFiles,
@@ -137,6 +149,24 @@ export class EngineeringRadarService {
   private async isTrackedInHead(repositoryRoot: string, relativeFilePath: string): Promise<boolean> {
     const result = await this.git.run(repositoryRoot, ["ls-tree", "-r", "--name-only", "HEAD", "--", relativeFilePath]);
     return result.ok && this.nonEmptyLines(result.stdout).includes(relativeFilePath);
+  }
+
+  private async readRelatedFilePaths(repositoryRoot: string, relativeFilePath: string): Promise<string[]> {
+    const symbol = path.basename(relativeFilePath).replace(/\.[^.]+$/, "");
+    if (symbol.length < 3) {
+      return [relativeFilePath];
+    }
+
+    const result = await this.git.run(repositoryRoot, ["grep", "-l", "-w", symbol, "HEAD", "--"]);
+    if (!result.ok) {
+      return [relativeFilePath];
+    }
+
+    const related = this.nonEmptyLines(result.stdout)
+      .map((line) => line.replace(/^HEAD:/, ""))
+      .filter((file) => file !== relativeFilePath)
+      .slice(0, 20);
+    return [relativeFilePath, ...related];
   }
 
   private async readWorkingTreeChange(

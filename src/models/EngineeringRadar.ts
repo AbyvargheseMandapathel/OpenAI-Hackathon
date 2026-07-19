@@ -13,6 +13,8 @@ export interface RadarPullRequest {
   baseRef: string;
   htmlUrl: string;
   body?: string;
+  matchedFiles?: string[];
+  fileChanges?: RadarPullRequestFileChange[];
 }
 
 export interface RadarFileChange {
