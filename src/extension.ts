@@ -42,7 +42,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger,
     gitRepositoryService,
     repositoryContextService,
-    gitHubContextService
+    gitHubContextService,
+    vscode.workspace.getConfiguration("aiRadar").get<boolean>("pullRequests.useGitHubApi", false)
   );
   const radarChatService = new RadarChatService(logger);
   const radarWebviewService = new RadarWebviewService(logger, radarChatService, gitHubAuthService);

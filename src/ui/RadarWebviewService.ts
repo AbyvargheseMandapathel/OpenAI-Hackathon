@@ -5,6 +5,11 @@ import type { GitHubAuthService, GitHubConnectionStatus } from "../git/GitHubAut
 import type { EngineeringRadar, RiskLevel } from "../models/EngineeringRadar";
 import type { Logger } from "../services/Logger";
 
+export interface RadarLoadingPanel {
+  show(radar: EngineeringRadar, refresh?: () => Promise<EngineeringRadar>): Promise<void>;
+  showError(details: string): void;
+}
+
 export class RadarWebviewService {
   public constructor(
     private readonly logger: Logger,
@@ -16,6 +21,12 @@ export class RadarWebviewService {
     radar: EngineeringRadar,
     refresh?: () => Promise<EngineeringRadar>
   ): Promise<void> {
+    const loadingPanel = this.showLoading();
+    await loadingPanel.show(radar, refresh);
+  }
+
+  /** Opens immediately so slow Git or optional network enrichment never blocks the editor. */
+  public showLoading(): RadarLoadingPanel {
     const panel = vscode.window.createWebviewPanel(
       "aiEngineeringRadar",
       "AI Engineering Radar",
@@ -25,7 +36,21 @@ export class RadarWebviewService {
         retainContextWhenHidden: true
       }
     );
+    panel.webview.html = this.renderLoadingHtml(panel.webview);
 
+    return {
+      show: async (radar, refresh) => this.showInPanel(panel, radar, refresh),
+      showError: (details) => {
+        panel.webview.html = this.renderLoadingHtml(panel.webview, details);
+      }
+    };
+  }
+
+  private async showInPanel(
+    panel: vscode.WebviewPanel,
+    radar: EngineeringRadar,
+    refresh?: () => Promise<EngineeringRadar>
+  ): Promise<void> {
     let currentRadar = radar;
     const render = async (): Promise<void> => {
       const connectionStatus = await this.gitHubAuthService.getConnectionStatus();
@@ -44,6 +69,30 @@ export class RadarWebviewService {
       undefined,
       []
     );
+  }
+
+  private renderLoadingHtml(webview: vscode.Webview, error?: string): string {
+    const nonce = this.createNonce();
+    const csp = [
+      "default-src 'none'",
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
+      `script-src 'nonce-${nonce}'`
+    ].join("; ");
+    const message = error
+      ? `Radar could not finish loading: ${this.escapeHtml(error)}`
+      : "Collecting local Git history and pull-request context…";
+    const action = error ? "<p>You can close this panel and try again.</p>" : "<div class=\"spinner\" aria-label=\"Loading\"></div>";
+
+    return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="${csp}"><title>AI Engineering Radar</title>
+<style>
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; display: grid; min-height: 100vh; place-items: center; }
+  main { text-align: center; max-width: 360px; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 10px; } p { color: var(--vscode-descriptionForeground); line-height: 1.5; }
+  .spinner { width: 26px; height: 26px; margin: 22px auto; border: 3px solid var(--vscode-editorWidget-border); border-top-color: var(--vscode-progressBar-background); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style></head><body><main><h1>AI Engineering Radar</h1><p>${message}</p>${action}</main></body></html>`;
   }
 
   private renderHtml(
@@ -482,14 +531,14 @@ export class RadarWebviewService {
 
   private renderPullRequests(radar: EngineeringRadar): string {
     if (radar.openPullRequests.length === 0) {
-      return this.renderListSection("Open Pull Requests For This File", []);
+      return this.renderListSection("Pull Requests Related To This File", []);
     }
 
     const items = radar.openPullRequests
       .map((pullRequest) => `<li>${this.renderPullRequestCard(pullRequest, [])}</li>`)
       .join("");
 
-    return `<section><h2>Open Pull Requests For This File</h2><ul>${items}</ul></section>`;
+    return `<section><h2>Pull Requests Related To This File</h2><ul>${items}</ul></section>`;
   }
 
   private renderChatSection(): string {

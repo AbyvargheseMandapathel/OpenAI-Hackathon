@@ -6,6 +6,20 @@ The original project began as **AI Merge Engineer**, a merge-conflict assistant.
 
 > Help developers understand what they need to know before writing code.
 
+## Hackathon Pitch
+
+AI Engineering Radar is a lightweight AI staff-engineer companion inside VS Code. A developer selects a tracked source file and runs **AI Radar: Analyze Current File**. Radar combines local Git history, contributors, working-tree status, and optional GitHub pull-request context into a focused engineering brief: what changed, why it changed, where the risk is, and what to review or test next.
+
+The goal is simple: make the relevant context visible before the code changes.
+
+## Built with Codex & GPT-5.6
+
+This hackathon prototype was developed with **Codex, powered by GPT-5.6**, as an engineering collaborator. Codex was used to iterate on the extension's TypeScript implementation, shape the engineering-context workflow, refine prompts and UI copy, and help validate the project through its compile, lint, and test commands.
+
+The product also integrates with the **Codex CLI** at runtime. When configured, the Radar Agent sends a bounded, read-only prompt containing the current file's Git, pull-request, contributor, risk, and test context. Codex then returns practical follow-up guidance—such as what to review, which tests to run, or how a pull-request file change relates to the active file. The same configurable CLI integration supports the legacy merge-conflict proposal flow.
+
+This separation is intentional: local Git and GitHub signals provide the evidence; Codex/GPT-5.6 turns that evidence into concise, developer-specific guidance. The extension never requires Codex for its deterministic radar analysis, and the CLI command, arguments, and timeout remain configurable in VS Code settings.
+
 ## Product Vision
 
 AI Engineering Radar acts like a lightweight AI staff engineer inside VS Code. When a developer opens a file, the extension should help answer:
@@ -91,6 +105,7 @@ Recommended Actions
 - Shows results in a dedicated VS Code webview.
 - Shows automatic alerts when the opened or edited file appears risky.
 - Provides an in-panel Radar Agent chat for follow-up questions and suggested next steps.
+- Provides on-demand AI analysis of an individual changed file in a relevant pull request.
 - Supports optional GitHub OAuth device flow.
 - Uses GitHub REST API context for repository and pull request awareness.
 - Preserves the original merge-conflict assistant:
@@ -109,7 +124,7 @@ Recommended Actions
 - Pull request relevance beyond branch matching.
 - Continuous background radar updates.
 - Merge history and analytics.
-- Packaged `.vsix` release.
+- Marketplace publishing and distribution setup.
 
 ## Requirements
 

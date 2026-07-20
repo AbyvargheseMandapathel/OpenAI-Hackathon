@@ -32,15 +32,18 @@ export class AnalyzeCurrentFileCommand {
       return;
     }
 
+    const analyze = async () => this.engineeringRadarService.analyze({
+      workspacePath: workspaceFolder.uri.fsPath,
+      filePath: activeEditor.document.uri.fsPath
+    });
+    const loadingPanel = this.radarWebviewService.showLoading();
+
     try {
-      const analyze = async () => this.engineeringRadarService.analyze({
-        workspacePath: workspaceFolder.uri.fsPath,
-        filePath: activeEditor.document.uri.fsPath
-      });
-      await this.radarWebviewService.show(await analyze(), analyze);
+      await loadingPanel.show(await analyze(), analyze);
     } catch (error) {
       const details = error instanceof Error ? error.message : String(error);
       this.logger.error("AI Engineering Radar failed.", error);
+      loadingPanel.showError(details);
       await vscode.window.showErrorMessage(`AI Engineering Radar failed: ${details}`);
     }
   }

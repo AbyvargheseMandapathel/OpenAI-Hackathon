@@ -2,7 +2,7 @@
   "name": "ai-engineering-radar",
   "displayName": "AI Engineering Radar",
   "description": "Surfaces engineering context, risk, contributors, pull requests, and recommended actions before implementation begins.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "abyvargheese",
   "license": "MIT",
   "repository": {
@@ -142,6 +142,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show automatic alerts when the active file appears risky or overlaps active engineering work."
+        },
+        "aiRadar.pullRequests.useGitHubApi": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use the GitHub API for live open-PR metadata. Disabled by default: Radar reads every PR reference available in local Git history without API calls."
         },
         "aiRadar.alerts.riskThreshold": {
           "type": "string",

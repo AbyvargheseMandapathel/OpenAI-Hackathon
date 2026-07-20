@@ -28,7 +28,8 @@ export class EngineeringRadarService {
     private readonly logger: Logger,
     private readonly gitRepositoryService: GitRepositoryService,
     private readonly repositoryContextService: RepositoryContextService,
-    private readonly gitHubContextService: GitHubContextService
+    private readonly gitHubContextService: GitHubContextService,
+    private readonly useGitHubApi = false
   ) {}
 
   public async analyze(options: BuildEngineeringRadarOptions): Promise<EngineeringRadar> {
@@ -58,16 +59,26 @@ export class EngineeringRadarService {
       trackedInHead ? this.readActiveContributors(repository.rootPath, relativeFilePath, diagnostics) : Promise.resolve([]),
       this.readChangedFiles(repository.rootPath, diagnostics)
     ]);
-    const github = await this.gitHubContextService.collectContext({
-      remoteUrl,
-      currentBranch,
-      relativeFilePath,
-      relatedFilePaths
-    });
+    // GitHub's API can be slow and rate-limited.  The default path uses the
+    // repository's own history, so opening Radar never depends on that API.
+    const [github, localPullRequests] = await Promise.all([
+      this.useGitHubApi
+        ? this.gitHubContextService.collectContext({
+            remoteUrl,
+            currentBranch,
+            relativeFilePath,
+            relatedFilePaths
+          })
+        : Promise.resolve(undefined),
+      trackedInHead
+        ? this.readLocalPullRequestHistory(repository.rootPath, relativeFilePath, remoteUrl, currentBranch)
+        : Promise.resolve([])
+    ]);
     const provenance = await this.readFileChangeHistory({
       remoteUrl,
       relativeFilePath,
-      recentFileCommits
+      recentFileCommits,
+      useGitHubApi: this.useGitHubApi
     });
     const historicalFileChanges = await this.enrichLocalFileChangeHistory(
       repository.rootPath,
@@ -85,13 +96,13 @@ export class EngineeringRadarService {
       changedFiles,
       affectedAreas,
       activeContributors,
-      openPullRequestCount: github?.openPullRequests.length ?? 0
+      openPullRequestCount: this.mergePullRequests(localPullRequests, github?.openPullRequests ?? []).length
     });
     const riskLevel = this.calculateRiskLevel(riskSignals);
     const recommendedActions = this.buildRecommendedActions({
       riskLevel,
       recentChanges,
-      openPullRequestCount: github?.openPullRequests.length ?? 0,
+      openPullRequestCount: this.mergePullRequests(localPullRequests, github?.openPullRequests ?? []).length,
       activeContributors,
       recommendedTests,
       affectedAreas
@@ -106,25 +117,7 @@ export class EngineeringRadarService {
       generatedAt: new Date().toISOString(),
       recentChanges,
       fileChangeHistory,
-      openPullRequests: github?.openPullRequests.map((pullRequest) => ({
-        number: pullRequest.number,
-        title: pullRequest.title,
-        state: pullRequest.state,
-        headRef: pullRequest.headRef,
-        baseRef: pullRequest.baseRef,
-        htmlUrl: pullRequest.htmlUrl,
-        body: pullRequest.body,
-        matchedFiles: pullRequest.matchedFiles,
-        fileChanges: pullRequest.changedFileDetails?.map((file) => ({
-          pullRequestNumber: pullRequest.number,
-          filename: file.filename,
-          status: file.status,
-          additions: file.additions,
-          deletions: file.deletions,
-          changes: file.changes,
-          patchExcerpt: file.patch ? this.truncatePatch(file.patch) : undefined
-        }))
-      })) ?? [],
+      openPullRequests: this.mergePullRequests(localPullRequests, github?.openPullRequests ?? []),
       activeContributors,
       changedFiles,
       affectedAreas,
@@ -325,11 +318,106 @@ export class EngineeringRadarService {
       .filter((commit): commit is RecentFileCommit => commit !== undefined);
   }
 
+  /**
+   * Finds every PR reference available in local Git history for this file.
+   * This deliberately uses Git rather than scraping GitHub or consuming its
+   * API, so it works offline and cannot consume GitHub API quota. It includes
+   * merged/historical PRs which are normally absent from an "open PR" query.
+   */
+  private async readLocalPullRequestHistory(
+    repositoryRoot: string,
+    relativeFilePath: string,
+    remoteUrl: string | undefined,
+    currentBranch: string
+  ): Promise<EngineeringRadar["openPullRequests"]> {
+    const repositoryUrl = this.githubRepositoryUrlFromRemote(remoteUrl);
+    if (!repositoryUrl) {
+      return [];
+    }
+
+    const result = await this.git.run(repositoryRoot, [
+      "log",
+      "--all",
+      "--format=%s",
+      "--",
+      relativeFilePath
+    ]);
+    if (!result.ok) {
+      this.logger.warn(`Unable to read local PR history: ${result.error ?? result.stderr}`);
+      return [];
+    }
+
+    const pullRequests = new Map<number, EngineeringRadar["openPullRequests"][number]>();
+    for (const summary of this.nonEmptyLines(result.stdout)) {
+      const number = this.pullRequestNumberFromSummary(summary);
+      if (!number || pullRequests.has(number)) {
+        continue;
+      }
+
+      const isMergeCommit = /merge pull request\s+#\d+/i.test(summary);
+      pullRequests.set(number, {
+        number,
+        title: summary
+          .replace(/^merge pull request\s+#\d+\s*(?:from\s+\S+)?\s*/i, "")
+          .replace(/\s*\(#\d+\)\s*$/, "")
+          .trim() || `Pull request #${number}`,
+        state: isMergeCommit ? "merged" : "historical",
+        headRef: "local history",
+        baseRef: currentBranch,
+        htmlUrl: `${repositoryUrl}/pull/${number}`,
+        matchedFiles: [relativeFilePath]
+      });
+    }
+
+    return [...pullRequests.values()];
+  }
+
+  private mergePullRequests(
+    localPullRequests: EngineeringRadar["openPullRequests"],
+    githubPullRequests: NonNullable<Awaited<ReturnType<GitHubContextService["collectContext"]>>>["openPullRequests"]
+  ): EngineeringRadar["openPullRequests"] {
+    const merged = new Map<number, EngineeringRadar["openPullRequests"][number]>();
+    for (const pullRequest of localPullRequests) {
+      merged.set(pullRequest.number, pullRequest);
+    }
+    for (const pullRequest of githubPullRequests) {
+      merged.set(pullRequest.number, {
+        number: pullRequest.number,
+        title: pullRequest.title,
+        state: pullRequest.state,
+        headRef: pullRequest.headRef,
+        baseRef: pullRequest.baseRef,
+        htmlUrl: pullRequest.htmlUrl,
+        body: pullRequest.body,
+        matchedFiles: pullRequest.matchedFiles,
+        fileChanges: pullRequest.changedFileDetails?.map((file) => ({
+          pullRequestNumber: pullRequest.number,
+          filename: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          changes: file.changes,
+          patchExcerpt: file.patch ? this.truncatePatch(file.patch) : undefined
+        }))
+      });
+    }
+    return [...merged.values()].sort((left, right) => right.number - left.number);
+  }
+
   private async readFileChangeHistory(options: {
     remoteUrl?: string;
     relativeFilePath: string;
     recentFileCommits: RecentFileCommit[];
+    useGitHubApi: boolean;
   }): Promise<RadarFileChange[]> {
+    if (!options.useGitHubApi) {
+      return options.recentFileCommits.map((commit) => ({
+        ...commit,
+        pullRequests: [],
+        fileChanges: []
+      }));
+    }
+
     const provenance = await this.gitHubContextService.collectFileProvenance({
       remoteUrl: options.remoteUrl,
       relativeFilePath: options.relativeFilePath,
