@@ -113,8 +113,8 @@
         },
         "aiMerge.github.oauthClientId": {
           "type": "string",
-          "default": "",
-          "description": "GitHub OAuth app Client ID. Device flow must be enabled for the OAuth app."
+          "default": "Ov23limt6GDCRy42umgV",
+          "description": "GitHub OAuth app Client ID used by the device flow. Override only for GitHub Enterprise or your own OAuth app."
         },
         "aiMerge.github.oauthScopes": {
           "type": "array",
@@ -130,7 +130,7 @@
         "aiMerge.github.repository": {
           "type": "string",
           "default": "",
-          "description": "GitHub repository in owner/name form. If empty, AI Merge tries to infer it from the origin remote."
+          "description": "Optional GitHub repository override in owner/name form. By default, AI Engineering Radar infers it from the origin remote."
         },
         "aiMerge.github.pullRequestNumber": {
           "type": "number",

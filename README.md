@@ -20,6 +20,32 @@ The product also integrates with the **Codex CLI** at runtime. When configured, 
 
 This separation is intentional: local Git and GitHub signals provide the evidence; Codex/GPT-5.6 turns that evidence into concise, developer-specific guidance. The extension never requires Codex for its deterministic radar analysis, and the CLI command, arguments, and timeout remain configurable in VS Code settings.
 
+## Judge Quick Start
+
+The intended hackathon experience uses Codex. GitHub authentication is **not** required: the demo works with the local Git history of any public repository.
+
+1. Install the packaged extension. In VS Code, run **Extensions: Install from VSIX...** and select `ai-engineering-radar-1.0.5.vsix` from this project. Reload VS Code when prompted.
+2. Install and connect the Codex CLI in a terminal:
+
+   ```powershell
+   npm.cmd install -g @openai/codex
+   codex login
+   codex --version
+   ```
+
+   The extension uses `codex` by default (or `codex.cmd` on Windows). No API key needs to be entered in the extension.
+3. Open any local Git repository you want Radar to analyze—no GitHub sign-in is needed. This can be a project you already have on your machine; cloning a public repository is simply an easy way to get realistic Git history for the demo. For example:
+
+   ```powershell
+   git clone https://github.com/microsoft/vscode-extension-samples.git
+   code .\vscode-extension-samples
+   ```
+
+4. Open a tracked source file, then run **AI Radar: Analyze Current File** from the Command Palette.
+5. In the Radar panel, use **Chat With Radar Agent** and ask, for example: *What should I check before changing this file?* The extension passes the local engineering context to Codex and displays its review guidance.
+
+For the core demo, do not use **AI Radar: Connect GitHub**. That optional sign-in enriches GitHub API capacity but is not needed for local Git analysis or Codex-powered Radar Agent guidance.
+
 ## Product Vision
 
 AI Engineering Radar acts like a lightweight AI staff engineer inside VS Code. When a developer opens a file, the extension should help answer:
@@ -132,7 +158,7 @@ Recommended Actions
 - Node.js
 - npm
 - Git
-- Optional: Codex CLI for AI merge proposals
+- Codex CLI, signed in with `codex login`, for the intended Radar Agent experience
 - Optional: GitHub OAuth app for GitHub context
 
 Install dependencies:
@@ -215,55 +241,33 @@ Is this safe to refactor now?
 
 ## GitHub Setup
 
-GitHub is optional. Enable it when you want repository and pull request context.
+GitHub is optional. Enable it when you want repository and pull request context. Installing the VSIX and cloning an application repository are separate steps: install Radar once, then open whichever local project you want it to inspect.
 
-Create a GitHub OAuth app:
+### Public Repositories: No Sign-In Required
 
-1. Open https://github.com/settings/developers
-2. Go to **OAuth Apps**
-3. Create a new OAuth app
-4. Use local placeholder URLs:
-
-```txt
-Homepage URL: http://localhost
-Authorization callback URL: http://localhost
-```
-
-5. Enable **Device Flow**
-6. Copy the OAuth app **Client ID**
-
-Add settings in the Extension Development Host:
+For a public GitHub repository, OAuth is not required. Enable GitHub context in VS Code Settings JSON:
 
 ```json
 {
-  "aiMerge.github.enabled": true,
-  "aiMerge.github.webBaseUrl": "https://github.com",
-  "aiMerge.github.apiBaseUrl": "https://api.github.com",
-  "aiMerge.github.oauthClientId": "YOUR_GITHUB_OAUTH_CLIENT_ID",
-  "aiMerge.github.repository": "owner/repository"
+  "aiMerge.github.enabled": true
 }
 ```
 
-Then run:
+Radar sends unauthenticated GitHub API requests and infers `owner/repository` from the workspace `origin` remote. This is enough to discover public pull requests and repository metadata.
 
-```txt
-AI Merge: GitHub Sign In
-```
+For example, an origin of `https://github.com/excalidraw/excalidraw.git` is automatically detected as `excalidraw/excalidraw`.
 
-For Excalidraw:
+### When To Connect GitHub
 
-```json
-{
-  "aiMerge.github.enabled": true,
-  "aiMerge.github.repository": "excalidraw/excalidraw"
-}
-```
+Use **AI Radar: Connect GitHub** only for private repositories or when you need GitHub's higher authenticated API limit. The extension stores the OAuth token in VS Code Secret Storage. Public repositories continue to work without it, subject to GitHub's lower anonymous API limit.
+
+Set `aiMerge.github.repository` only when the repository cannot be inferred, such as a workspace without an `origin` remote. Set `aiMerge.github.oauthClientId`, `webBaseUrl`, and `apiBaseUrl` only when using your own OAuth app or GitHub Enterprise.
 
 The settings still use the `aiMerge` namespace for compatibility with the original extension. A future cleanup can migrate them to `aiRadar`.
 
 ## Codex CLI Setup
 
-Codex CLI is only required for the legacy AI merge proposal flow.
+Codex CLI is required for the intended hackathon demo: it powers **Chat With Radar Agent** and on-demand pull-request file analysis. It also powers the legacy AI merge proposal flow.
 
 Install:
 
@@ -276,6 +280,16 @@ Log in:
 ```powershell
 codex login
 ```
+
+Verify that VS Code can find it:
+
+```powershell
+codex --version
+where.exe codex
+where.exe codex.cmd
+```
+
+There is no separate in-extension Codex login button. Once `codex login` succeeds in a terminal, Radar invokes the CLI automatically when you use **Chat With Radar Agent** or analyze a pull-request file.
 
 Default AI command settings:
 
@@ -310,16 +324,9 @@ Then set:
 
 ## Demo With Excalidraw
 
-Open your cloned Excalidraw repo in the Extension Development Host.
+Open your local Excalidraw checkout in the Extension Development Host. You only need this checkout because it is the repository being analyzed; you do not need to clone the Radar extension again after installing its VSIX.
 
-Recommended settings:
-
-```json
-{
-  "aiMerge.github.enabled": true,
-  "aiMerge.github.repository": "excalidraw/excalidraw"
-}
-```
+Click **Connect GitHub** in the Radar panel if you want live PR context. Excalidraw is inferred automatically from its `origin` remote.
 
 Open a meaningful file, then run:
 
@@ -455,9 +462,9 @@ AI Radar: Analyze Current File
 | `aiMerge.github.enabled` | `false` | Enable GitHub API context |
 | `aiMerge.github.webBaseUrl` | `https://github.com` | GitHub web URL |
 | `aiMerge.github.apiBaseUrl` | `https://api.github.com` | GitHub REST API URL |
-| `aiMerge.github.oauthClientId` | empty | GitHub OAuth app client ID |
+| `aiMerge.github.oauthClientId` | bundled GitHub.com Client ID | OAuth app client ID; override for your own OAuth app or Enterprise |
 | `aiMerge.github.oauthScopes` | `["repo", "read:user"]` | OAuth scopes |
-| `aiMerge.github.repository` | empty | Repository in `owner/name` form |
+| `aiMerge.github.repository` | empty | Optional repository override; inferred from `origin` by default |
 | `aiMerge.github.pullRequestNumber` | `0` | Optional pull request number |
 | `aiMerge.github.token` | empty | Personal access token fallback |
 | `aiMerge.aiCommand` | `codex` | Legacy merge AI command executable |
@@ -483,30 +490,15 @@ Then use the command palette in the new window.
 
 ### Radar Requires A Git Repository
 
-Open a folder that is inside a Git repo. The radar depends on Git history, blame, and status.
+Open a folder that is inside a Git repo. The radar depends on Git history, blame, and status. A downloaded ZIP can be opened, but it has no `.git` history unless you initialize or clone it, so commit, branch, contributor, and automatic GitHub-repository context will be unavailable.
 
 ### No GitHub Pull Requests Show Up
 
-Check:
-
-```json
-{
-  "aiMerge.github.enabled": true,
-  "aiMerge.github.repository": "owner/repository"
-}
-```
-
-Then run:
-
-```txt
-AI Merge: GitHub Sign In
-```
-
-If `repository` is empty, the extension tries to infer it from `origin`.
+For public repositories, set `"aiMerge.github.enabled": true` in Settings JSON; no sign-in is required. For private repositories or higher API limits, click **Connect GitHub**. Radar infers the repository from the workspace `origin` remote. Set `aiMerge.github.repository` only when the remote is unavailable or not a GitHub remote.
 
 ### Codex Launch Errors
 
-Codex only affects the legacy merge flow. Radar still works without Codex.
+Codex powers the interactive Radar Agent and the legacy merge flow. The deterministic radar can still collect local Git context without it, but the intended demo requires Codex.
 
 If Codex cannot be found:
 
